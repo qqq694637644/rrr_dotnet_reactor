@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}授权详情 #{{ license.id }} - 授权服务器{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>授权详情 #{{ license.id }}</h1>
+    <p>{{ license.customer_name or '-' }} / <code>{{ license.license_key_display }}</code></p>
+  </div>
+  <a class="button secondary" href="/admin/licenses">返回列表</a>
+</div>
+
+<section class="grid two">
+  <div class="card">
+    <h2>基础信息</h2>
+    <dl class="details">
+      <dt>客户名称</dt><dd>{{ license.customer_name or '-' }}</dd>
+      <dt>状态</dt><dd><span class="badge status-{{ license.status }}">{{ license.status|status_label }}</span></dd>
+      <dt>是否永久</dt><dd>{{ '是' if license.is_permanent else '否' }}</dd>
+      <dt>到期时间</dt><dd>{{ '永久' if license.is_permanent else license.expire_at|dt }}</dd>
+      <dt>剩余时间</dt><dd>{{ license|remaining }}</dd>
+      <dt>绑定机器</dt><dd>{{ license.hardware_id_display or '-' }}</dd>
+      <dt>激活时间</dt><dd>{{ license.activated_at|dt }}</dd>
+      <dt>最后验证</dt><dd>{{ license.last_check_at|dt }}</dd>
+      <dt>最后 IP</dt><dd>{{ license.last_ip or '-' }}</dd>
+      <dt>创建时间</dt><dd>{{ license.created_at|dt }}</dd>
+      <dt>备注</dt><dd>{{ license.note or '-' }}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>操作</h2>
+    <div class="actions">
+      <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="days" value="30"><button type="submit">增加 30 天</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="days" value="90"><button type="submit">增加 90 天</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="days" value="365"><button type="submit">增加 365 天</button></form>
+    </div>
+    <form method="post" action="/admin/licenses/{{ license.id }}/renew" class="stack compact">
+      <label>自定义到期时间
+        <input name="custom_expire_at" type="datetime-local" required>
+      </label>
+      <button type="submit">设置到期时间</button>
+    </form>
+    <div class="actions">
+      <form method="post" action="/admin/licenses/{{ license.id }}/permanent"><input type="hidden" name="value" value="true"><button type="submit">设置永久</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/permanent"><input type="hidden" name="value" value="false"><button type="submit">取消永久</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/disable"><button class="danger" type="submit">禁用授权</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/restore"><button type="submit">恢复授权</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/unbind"><button type="submit">解绑机器</button></form>
+      {% if license.status == 'unused' and not license.activated_at %}
+      <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定删除这条未激活卡密？')"><button class="danger" type="submit">删除未激活卡密</button></form>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>最近日志</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>时间</th>
+          <th>事件</th>
+          <th>结果</th>
+          <th>消息</th>
+          <th>机器</th>
+          <th>IP</th>
+          <th>客户端版本</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for log in logs %}
+        <tr>
+          <td>{{ log.created_at|dt }}</td>
+          <td>{{ log.event_type }}</td>
+          <td>{{ log.result }}</td>
+          <td>{{ log.message }}</td>
+          <td>{{ log.hardware_id_display or '-' }}</td>
+          <td>{{ log.ip or '-' }}</td>
+          <td>{{ log.client_version or '-' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">暂无日志</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

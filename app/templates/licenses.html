@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}授权列表 - 授权服务器{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>授权列表</h1>
+    <p>手动开卡密、查看到期时间、绑定机器和最后在线信息。</p>
+  </div>
+  <a class="button" href="/admin/licenses/new">新增卡密</a>
+</div>
+
+<div class="filters">
+  <a href="/admin/licenses" class="{% if not status %}active{% endif %}">全部</a>
+  {% for item in statuses %}
+    <a href="/admin/licenses?status={{ item.value }}" class="{% if status == item.value %}active{% endif %}">{{ item.value|status_label }}</a>
+  {% endfor %}
+</div>
+
+<section class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>客户</th>
+          <th>卡密</th>
+          <th>状态</th>
+          <th>到期</th>
+          <th>剩余</th>
+          <th>绑定机器</th>
+          <th>最后在线</th>
+          <th>最后 IP</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for license in licenses %}
+        <tr>
+          <td>{{ license.id }}</td>
+          <td>{{ license.customer_name or '-' }}</td>
+          <td><code>{{ license.license_key_display }}</code></td>
+          <td><span class="badge status-{{ license.status }}">{{ license.status|status_label }}</span></td>
+          <td>{{ license.expire_at|dt if not license.is_permanent else '永久' }}</td>
+          <td>{{ license|remaining }}</td>
+          <td>{{ license.hardware_id_display or '-' }}</td>
+          <td>{{ license.last_check_at|dt }}</td>
+          <td>{{ license.last_ip or '-' }}</td>
+          <td><a href="/admin/licenses/{{ license.id }}">详情</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="empty">暂无授权</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

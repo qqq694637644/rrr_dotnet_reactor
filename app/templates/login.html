@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}登录 - 授权服务器{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>管理员登录</h1>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/admin/login" class="stack">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>用户名
+      <input name="username" required autofocus>
+    </label>
+    <label>密码
+      <input name="password" type="password" required>
+    </label>
+    <button type="submit">登录</button>
+  </form>
+</section>
+{% endblock %}
