@@ -7,6 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .models import AdminUser, License, LicenseLog, LicenseStatus
+from .config import DEFAULT_ADMIN_PASSWORD
 from .security import (
     display_hardware_id,
     display_license_key,
@@ -16,6 +17,7 @@ from .security import (
     make_license_key,
     normalize_hardware_id,
     utcnow,
+    verify_password,
 )
 
 
@@ -26,9 +28,15 @@ class LicenseResult:
     license: License | None = None
 
 
-def seed_admin_user(db: Session, username: str, password: str) -> AdminUser:
+def seed_admin_user(db: Session, username: str, password: str, *, reject_default_password: bool = False) -> AdminUser:
     existing = db.scalar(select(AdminUser).where(AdminUser.username == username))
     if existing:
+        if reject_default_password and verify_password(DEFAULT_ADMIN_PASSWORD, existing.password_hash):
+            raise RuntimeError("Existing admin account still uses the default password; reset the database or change it before startup")
+        if not verify_password(password, existing.password_hash):
+            existing.password_hash = hash_password(password)
+            db.commit()
+            db.refresh(existing)
         return existing
 
     admin = AdminUser(username=username, password_hash=hash_password(password))
@@ -184,6 +192,8 @@ def activate_license(db: Session, *, license_key: str, hardware_id: str, client_
         return LicenseResult(success=False, message="卡密不存在")
 
     update_expired_status(license, now)
+    if license.status == LicenseStatus.DELETED.value:
+        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "授权已删除")
     if license.status == LicenseStatus.DISABLED.value:
         return _fail_result(db, license, "activate", hardware_id, ip, client_version, "卡密已禁用")
     if license.status == LicenseStatus.EXPIRED.value:
@@ -264,6 +274,8 @@ def check_license(
         return LicenseResult(success=False, message="授权不存在")
 
     update_expired_status(license, now)
+    if license.status == LicenseStatus.DELETED.value:
+        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "授权已删除")
     if license.status == LicenseStatus.UNUSED.value or not license.activated_at:
         return _fail_result(db, license, event_type, hardware_id, ip, client_version, "授权未激活")
     if license.status == LicenseStatus.DISABLED.value:
@@ -364,6 +376,14 @@ def set_permanent(db: Session, license: License, value: bool, *, ip: str | None 
 def disable_license(db: Session, license: License, *, ip: str | None = None) -> License:
     license.status = LicenseStatus.DISABLED.value
     add_log(db, license=license, event_type="disable", hardware_id=None, ip=ip, client_version=None, result="success", message="禁用授权")
+    db.commit()
+    db.refresh(license)
+    return license
+
+
+def delete_license(db: Session, license: License, *, ip: str | None = None) -> License:
+    license.status = LicenseStatus.DELETED.value
+    add_log(db, license=license, event_type="delete", hardware_id=None, ip=ip, client_version=None, result="success", message="删除未激活卡密")
     db.commit()
     db.refresh(license)
     return license

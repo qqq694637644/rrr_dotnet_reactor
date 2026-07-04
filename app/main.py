@@ -30,6 +30,7 @@ from .services import (
     activate_license,
     check_license,
     create_license,
+    delete_license,
     disable_license,
     remaining_days,
     renew_license,
@@ -50,7 +51,12 @@ async def lifespan(_: FastAPI):
     settings.validate_for_startup()
     init_db()
     with SessionLocal() as db:
-        seed_admin_user(db, settings.admin_username, settings.admin_password)
+        seed_admin_user(
+            db,
+            settings.admin_username,
+            settings.admin_password,
+            reject_default_password=settings.environment == "production",
+        )
     yield
 
 
@@ -83,6 +89,7 @@ def status_label(status: str) -> str:
         LicenseStatus.ACTIVE.value: "正常",
         LicenseStatus.EXPIRED.value: "已过期",
         LicenseStatus.DISABLED.value: "已禁用",
+        LicenseStatus.DELETED.value: "已删除",
     }
     return labels.get(status, status)
 
@@ -153,26 +160,6 @@ def require_csrf(request: Request, csrf_token: Annotated[str | None, Form()] = N
 @app.exception_handler(LoginRequired)
 def login_required_handler(request: Request, exc: LoginRequired) -> RedirectResponse:
     return redirect(f"/admin/login?next={request.url.path}")
-
-
-@app.exception_handler(Exception)
-def unhandled_exception_handler(request: Request, exc: Exception) -> Response:
-    if request.url.path.startswith("/api/"):
-        return JSONResponse(
-            status_code=500,
-            content={
-                "success": False,
-                "valid": False,
-                "message": "服务器错误",
-                "license_id": None,
-                "status": None,
-                "expire_at": None,
-                "is_permanent": False,
-                "remaining_days": None,
-                "server_time": utcnow().isoformat(),
-            },
-        )
-    raise exc
 
 
 @app.get("/health")
@@ -261,7 +248,7 @@ def log_list(
             "logs": logs,
             "event_type": event_type,
             "result": result,
-            "event_types": ["create", "activate", "verify", "heartbeat", "renew", "disable", "unbind"],
+            "event_types": ["create", "activate", "verify", "heartbeat", "renew", "disable", "unbind", "delete"],
             "results": ["success", "failed"],
             "limit": limit,
         },
@@ -404,6 +391,7 @@ def unbind_license_route(
 
 @app.post("/admin/licenses/{license_id}/delete", include_in_schema=False)
 def delete_license_route(
+    request: Request,
     license_id: int,
     admin: Annotated[AdminUser, Depends(require_admin)],
     csrf: Annotated[None, Depends(require_csrf)],
@@ -414,8 +402,7 @@ def delete_license_route(
         raise HTTPException(status_code=404, detail="授权不存在")
     if license.status != LicenseStatus.UNUSED.value or license.activated_at:
         raise HTTPException(status_code=400, detail="只能删除未激活卡密")
-    db.delete(license)
-    db.commit()
+    delete_license(db, license, ip=get_client_ip(request))
     return redirect("/admin/licenses")
 
 

@@ -14,6 +14,7 @@ class LicenseStatus(str, Enum):
     ACTIVE = "active"
     EXPIRED = "expired"
     DISABLED = "disabled"
+    DELETED = "deleted"
 
 
 class AdminUser(Base):
@@ -53,7 +54,6 @@ class License(Base):
 
     logs: Mapped[list["LicenseLog"]] = relationship(
         back_populates="license",
-        cascade="all, delete-orphan",
         order_by=lambda: LicenseLog.created_at.desc(),
     )
 

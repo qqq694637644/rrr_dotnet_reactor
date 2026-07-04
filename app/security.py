@@ -61,9 +61,7 @@ def display_hardware_id(hardware_id: str) -> str:
     value = normalize_hardware_id(hardware_id)
     if not value:
         return ""
-    if len(value) <= 12:
-        return value
-    return f"{value[:8]}...{value[-4:]}"
+    return f"hash:{hash_hardware_id(value)[:8]}"
 
 
 def hash_password(password: str) -> str:

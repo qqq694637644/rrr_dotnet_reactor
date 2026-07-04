@@ -6,19 +6,44 @@ from functools import lru_cache
 
 DEFAULT_ADMIN_PASSWORD = "admin123"
 DEFAULT_SECRET_KEY = "change-this-secret-before-production"
+VALID_ENVIRONMENTS = {"development", "production"}
+VALID_BOOL_VALUES = {"true": True, "1": True, "false": False, "0": False}
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    normalized = value.strip().lower()
+    if normalized not in VALID_BOOL_VALUES:
+        raise RuntimeError(f"{name} must be one of: true, false, 1, 0")
+    return VALID_BOOL_VALUES[normalized]
+
+
+def _env_name(name: str, default: str) -> str:
+    value = os.getenv(name, default).strip().lower()
+    if value not in VALID_ENVIRONMENTS:
+        raise RuntimeError(f"{name} must be one of: development, production")
+    return value
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be an integer") from exc
+    if parsed <= 0:
+        raise RuntimeError(f"{name} must be greater than 0")
+    return parsed
 
 
 @dataclass(frozen=True)
 class Settings:
     app_name: str
-    database_url: str
+    db_path: str
     secret_key: str
     hash_pepper: str
     admin_username: str
@@ -39,27 +64,24 @@ class Settings:
             errors.append("AUTH_HASH_PEPPER must be explicitly set in production")
         if self.admin_password == DEFAULT_ADMIN_PASSWORD:
             errors.append("AUTH_ADMIN_PASSWORD must be changed in production")
+        if not self.cookie_secure:
+            errors.append("AUTH_COOKIE_SECURE must be true in production")
         if errors:
             raise RuntimeError("; ".join(errors))
 
     @classmethod
     def from_env(cls) -> "Settings":
-        db_url = os.getenv("AUTH_DATABASE_URL")
-        if not db_url:
-            db_path = os.getenv("AUTH_DB_PATH", "./authorization.db")
-            db_url = f"sqlite:///{db_path}"
-
         secret_key = os.getenv("AUTH_SECRET_KEY", DEFAULT_SECRET_KEY)
         return cls(
             app_name=os.getenv("AUTH_APP_NAME", "Small Online Authorization Server"),
-            database_url=db_url,
+            db_path=os.getenv("AUTH_DB_PATH", "./authorization.db"),
             secret_key=secret_key,
             hash_pepper=os.getenv("AUTH_HASH_PEPPER", secret_key),
             admin_username=os.getenv("AUTH_ADMIN_USERNAME", "admin"),
             admin_password=os.getenv("AUTH_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD),
             session_cookie_name=os.getenv("AUTH_SESSION_COOKIE", "auth_admin_session"),
-            session_max_age_seconds=int(os.getenv("AUTH_SESSION_MAX_AGE_SECONDS", str(7 * 24 * 60 * 60))),
-            environment=os.getenv("AUTH_ENV", "development").strip().lower(),
+            session_max_age_seconds=_env_int("AUTH_SESSION_MAX_AGE_SECONDS", 7 * 24 * 60 * 60),
+            environment=_env_name("AUTH_ENV", "development"),
             cookie_secure=_env_bool("AUTH_COOKIE_SECURE", False),
             trust_proxy_headers=_env_bool("AUTH_TRUST_PROXY_HEADERS", False),
         )
