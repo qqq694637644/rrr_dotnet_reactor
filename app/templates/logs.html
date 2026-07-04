@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}授权日志 - 授权服务器{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>授权日志</h1>
+    <p>查看创建、激活、启动验证、心跳、续期、禁用和解绑记录。</p>
+  </div>
+  <a class="button secondary" href="/admin/licenses">返回授权列表</a>
+</div>
+
+<form method="get" action="/admin/logs" class="filters form-filters">
+  <label>事件
+    <select name="event_type">
+      <option value="">全部</option>
+      {% for item in event_types %}
+      <option value="{{ item }}" {% if event_type == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>结果
+    <select name="result">
+      <option value="">全部</option>
+      {% for item in results %}
+      <option value="{{ item }}" {% if result == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>最多显示
+    <input name="limit" type="number" min="1" max="500" value="{{ limit }}">
+  </label>
+  <button type="submit">筛选</button>
+</form>
+
+<section class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>时间</th>
+          <th>授权 ID</th>
+          <th>客户</th>
+          <th>卡密</th>
+          <th>事件</th>
+          <th>结果</th>
+          <th>消息</th>
+          <th>机器</th>
+          <th>IP</th>
+          <th>客户端版本</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for log in logs %}
+        <tr>
+          <td>{{ log.created_at|dt }}</td>
+          <td>{% if log.license %}<a href="/admin/licenses/{{ log.license.id }}">{{ log.license.id }}</a>{% else %}-{% endif %}</td>
+          <td>{{ log.license.customer_name if log.license else '-' }}</td>
+          <td><code>{{ log.license.license_key_display if log.license else '-' }}</code></td>
+          <td>{{ log.event_type }}</td>
+          <td>{{ log.result }}</td>
+          <td>{{ log.message }}</td>
+          <td>{{ log.hardware_id_display or '-' }}</td>
+          <td>{{ log.ip or '-' }}</td>
+          <td>{{ log.client_version or '-' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10" class="empty">暂无日志</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

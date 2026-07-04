@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .database import SessionLocal, get_db, init_db
-from .models import AdminUser, License, LicenseStatus
+from .models import AdminUser, License, LicenseLog, LicenseStatus
 from .schemas import ActivateRequest, CheckRequest, LicenseCheckResponse
 from .security import clear_session_cookie, get_client_ip, read_session_token, set_session_cookie, utcnow, verify_password
 from .services import (
@@ -138,6 +138,26 @@ def login_required_handler(request: Request, exc: LoginRequired) -> RedirectResp
     return redirect(f"/admin/login?next={request.url.path}")
 
 
+@app.exception_handler(Exception)
+def unhandled_exception_handler(request: Request, exc: Exception) -> Response:
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "valid": False,
+                "message": "服务器错误",
+                "license_id": None,
+                "status": None,
+                "expire_at": None,
+                "is_permanent": False,
+                "remaining_days": None,
+                "server_time": utcnow().isoformat(),
+            },
+        )
+    raise exc
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "server_time": utcnow().isoformat()}
@@ -198,6 +218,37 @@ def license_list(
     if changed:
         db.commit()
     return render_template(request, "licenses.html", {"admin": admin, "licenses": licenses, "status": status, "statuses": list(LicenseStatus)})
+
+
+@app.get("/admin/logs", response_class=HTMLResponse, include_in_schema=False)
+def log_list(
+    request: Request,
+    admin: Annotated[AdminUser, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    event_type: str | None = None,
+    result: str | None = None,
+    limit: int = 200,
+) -> Response:
+    limit = min(max(limit, 1), 500)
+    query = select(LicenseLog).order_by(desc(LicenseLog.created_at), desc(LicenseLog.id)).limit(limit)
+    if event_type:
+        query = query.where(LicenseLog.event_type == event_type)
+    if result:
+        query = query.where(LicenseLog.result == result)
+    logs = list(db.scalars(query))
+    return render_template(
+        request,
+        "logs.html",
+        {
+            "admin": admin,
+            "logs": logs,
+            "event_type": event_type,
+            "result": result,
+            "event_types": ["create", "activate", "verify", "heartbeat", "renew", "disable", "unbind"],
+            "results": ["success", "failed"],
+            "limit": limit,
+        },
+    )
 
 
 @app.get("/admin/licenses/new", response_class=HTMLResponse, include_in_schema=False)

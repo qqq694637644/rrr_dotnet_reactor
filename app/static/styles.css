@@ -99,6 +99,25 @@ th { color: var(--muted); font-size: 13px; font-weight: 700; }
 .details dt { color: var(--muted); }
 .details dd { margin: 0; word-break: break-word; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.compact-actions { margin-top: 0; gap: 6px; min-width: 260px; }
+.small-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 0;
+  background: var(--primary);
+  color: #fff;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.small-button:hover { background: var(--primary-dark); text-decoration: none; }
+.small-button.danger { background: var(--danger); }
+.form-filters { align-items: end; }
+.form-filters label { min-width: 150px; }
 code { background: #f1f5f9; padding: 2px 5px; border-radius: 6px; }
 @media (max-width: 760px) {
   .topbar, .page-head { flex-direction: column; align-items: flex-start; }

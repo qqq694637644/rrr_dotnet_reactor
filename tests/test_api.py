@@ -141,3 +141,17 @@ def test_admin_login_and_create_license_page(client):
     assert response.status_code == 200
     assert "卡密已生成" in response.text
     assert "后台客户" in response.text
+
+    list_page = client.get("/admin/licenses")
+    assert list_page.status_code == 200
+    assert "已激活" in list_page.text
+    assert "续期30天" in list_page.text
+
+    logs_page = client.get("/admin/logs")
+    assert logs_page.status_code == 200
+    assert "授权日志" in logs_page.text
+    assert "create" in logs_page.text
+
+    filtered_logs_page = client.get("/admin/logs?event_type=create&result=success")
+    assert filtered_logs_page.status_code == 200
+    assert "后台客户" in filtered_logs_page.text

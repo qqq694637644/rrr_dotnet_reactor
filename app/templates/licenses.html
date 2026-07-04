@@ -25,6 +25,7 @@
           <th>客户</th>
           <th>卡密</th>
           <th>状态</th>
+          <th>已激活</th>
           <th>到期</th>
           <th>剩余</th>
           <th>绑定机器</th>
@@ -40,15 +41,32 @@
           <td>{{ license.customer_name or '-' }}</td>
           <td><code>{{ license.license_key_display }}</code></td>
           <td><span class="badge status-{{ license.status }}">{{ license.status|status_label }}</span></td>
+          <td>{{ '是' if license.activated_at else '否' }}</td>
           <td>{{ license.expire_at|dt if not license.is_permanent else '永久' }}</td>
           <td>{{ license|remaining }}</td>
           <td>{{ license.hardware_id_display or '-' }}</td>
           <td>{{ license.last_check_at|dt }}</td>
           <td>{{ license.last_ip or '-' }}</td>
-          <td><a href="/admin/licenses/{{ license.id }}">详情</a></td>
+          <td>
+            <div class="actions compact-actions">
+              <a class="small-button" href="/admin/licenses/{{ license.id }}">详情</a>
+              <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="days" value="30"><button class="small-button" type="submit">续期30天</button></form>
+              {% if license.status == 'disabled' %}
+              <form method="post" action="/admin/licenses/{{ license.id }}/restore"><button class="small-button" type="submit">恢复</button></form>
+              {% else %}
+              <form method="post" action="/admin/licenses/{{ license.id }}/disable"><button class="small-button danger" type="submit">禁用</button></form>
+              {% endif %}
+              {% if license.hardware_id_display %}
+              <form method="post" action="/admin/licenses/{{ license.id }}/unbind"><button class="small-button" type="submit">解绑</button></form>
+              {% endif %}
+              {% if license.status == 'unused' and not license.activated_at %}
+              <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定删除这条未激活卡密？')"><button class="small-button danger" type="submit">删除</button></form>
+              {% endif %}
+            </div>
+          </td>
         </tr>
         {% else %}
-        <tr><td colspan="10" class="empty">暂无授权</td></tr>
+        <tr><td colspan="11" class="empty">暂无授权</td></tr>
         {% endfor %}
       </tbody>
     </table>
