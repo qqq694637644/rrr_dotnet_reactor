@@ -148,6 +148,11 @@ def update_expired_status(license: License, now: datetime | None = None) -> None
         license.status = LicenseStatus.EXPIRED.value
 
 
+def ensure_not_deleted(license: License) -> None:
+    if license.status == LicenseStatus.DELETED.value:
+        raise ValueError("授权已删除，不能继续操作")
+
+
 def _success_result(license: License, message: str) -> LicenseResult:
     return LicenseResult(success=True, message=message, license=license)
 
@@ -304,6 +309,7 @@ def check_license(
 
 
 def renew_license(db: Session, license: License, days: int, *, ip: str | None = None) -> License:
+    ensure_not_deleted(license)
     if days <= 0:
         raise ValueError("续期天数必须大于 0")
     now = utcnow()
@@ -329,6 +335,7 @@ def renew_license(db: Session, license: License, days: int, *, ip: str | None = 
 
 
 def set_custom_expire_at(db: Session, license: License, expire_at: datetime, *, ip: str | None = None) -> License:
+    ensure_not_deleted(license)
     license.expire_at = expire_at
     license.is_permanent = False
     if license.activated_at:
@@ -349,6 +356,7 @@ def set_custom_expire_at(db: Session, license: License, expire_at: datetime, *, 
 
 
 def set_permanent(db: Session, license: License, value: bool, *, ip: str | None = None) -> License:
+    ensure_not_deleted(license)
     license.is_permanent = value
     if value:
         license.expire_at = None
@@ -374,6 +382,7 @@ def set_permanent(db: Session, license: License, value: bool, *, ip: str | None 
 
 
 def disable_license(db: Session, license: License, *, ip: str | None = None) -> License:
+    ensure_not_deleted(license)
     license.status = LicenseStatus.DISABLED.value
     add_log(db, license=license, event_type="disable", hardware_id=None, ip=ip, client_version=None, result="success", message="禁用授权")
     db.commit()
@@ -382,6 +391,8 @@ def disable_license(db: Session, license: License, *, ip: str | None = None) -> 
 
 
 def delete_license(db: Session, license: License, *, ip: str | None = None) -> License:
+    if license.status != LicenseStatus.UNUSED.value or license.activated_at:
+        raise ValueError("只能删除未激活卡密")
     license.status = LicenseStatus.DELETED.value
     add_log(db, license=license, event_type="delete", hardware_id=None, ip=ip, client_version=None, result="success", message="删除未激活卡密")
     db.commit()
@@ -390,6 +401,7 @@ def delete_license(db: Session, license: License, *, ip: str | None = None) -> L
 
 
 def restore_license(db: Session, license: License, *, ip: str | None = None) -> License:
+    ensure_not_deleted(license)
     if not license.activated_at:
         license.status = LicenseStatus.UNUSED.value
     elif not license.is_permanent and license.expire_at and license.expire_at <= utcnow():
@@ -403,6 +415,7 @@ def restore_license(db: Session, license: License, *, ip: str | None = None) -> 
 
 
 def unbind_license(db: Session, license: License, *, ip: str | None = None) -> License:
+    ensure_not_deleted(license)
     license.hardware_id_hash = None
     license.hardware_id_display = None
     add_log(db, license=license, event_type="unbind", hardware_id=None, ip=ip, client_version=None, result="success", message="解绑机器")

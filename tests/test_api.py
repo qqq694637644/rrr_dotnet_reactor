@@ -5,6 +5,7 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Barrier
 from pathlib import Path
 
 import pytest
@@ -126,8 +127,10 @@ def test_concurrent_activation_only_binds_once(client):
     from app.services import activate_license
 
     license_id, key = _create_license(days=30)
+    barrier = Barrier(2)
 
     def activate(hardware_id: str):
+        barrier.wait(timeout=5)
         with SessionLocal() as db:
             result = activate_license(db, license_key=key, hardware_id=hardware_id, client_version="pytest", ip="127.0.0.1")
             return result.success, result.message, result.license.hardware_id_display if result.license else None
@@ -264,6 +267,37 @@ def test_delete_unused_license_is_logical_and_keeps_logs(client):
         assert db.query(LicenseLog).filter(LicenseLog.license_id == license_id).count() >= 2
 
     activation = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-DELETED"})
+    assert activation.status_code == 200
+    assert activation.json()["success"] is False
+    assert activation.json()["message"] == "授权已删除"
+
+
+def test_deleted_license_cannot_be_restored_or_modified(client):
+    from app.database import SessionLocal
+    from app.models import License
+
+    license_id, key = _create_admin_license(client, "删除终态客户")
+    detail_page = client.get(f"/admin/licenses/{license_id}")
+    csrf_token = _csrf_token(detail_page.text)
+
+    delete_response = client.post(f"/admin/licenses/{license_id}/delete", data={"csrf_token": csrf_token}, follow_redirects=False)
+    assert delete_response.status_code == 303
+
+    for suffix, data in [
+        ("restore", {"csrf_token": csrf_token}),
+        ("disable", {"csrf_token": csrf_token}),
+        ("renew", {"csrf_token": csrf_token, "days": "30"}),
+        ("permanent", {"csrf_token": csrf_token, "value": "true"}),
+        ("unbind", {"csrf_token": csrf_token}),
+    ]:
+        response = client.post(f"/admin/licenses/{license_id}/{suffix}", data=data, follow_redirects=False)
+        assert response.status_code == 400
+        assert "授权已删除" in response.text
+        with SessionLocal() as db:
+            license = db.get(License, license_id)
+            assert license.status == "deleted"
+
+    activation = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-DELETED-TERM"})
     assert activation.status_code == 200
     assert activation.json()["success"] is False
     assert activation.json()["message"] == "授权已删除"

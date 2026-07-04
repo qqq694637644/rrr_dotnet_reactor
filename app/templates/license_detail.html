@@ -29,6 +29,9 @@
 
   <div class="card">
     <h2>操作</h2>
+    {% if license.status == 'deleted' %}
+    <p class="alert">该授权已逻辑删除，不能再续期、恢复、解绑、禁用或重新激活。</p>
+    {% else %}
     <div class="actions">
       <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="days" value="30"><button type="submit">增加 30 天</button></form>
       <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="days" value="90"><button type="submit">增加 90 天</button></form>
@@ -51,6 +54,7 @@
       <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定删除这条未激活卡密？')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">删除未激活卡密</button></form>
       {% endif %}
     </div>
+    {% endif %}
   </div>
 </section>
 

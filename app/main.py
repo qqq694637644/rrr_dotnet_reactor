@@ -127,6 +127,10 @@ def redirect(url: str) -> RedirectResponse:
     return RedirectResponse(url=url, status_code=303)
 
 
+def bad_request_from_value_error(exc: ValueError) -> HTTPException:
+    return HTTPException(status_code=400, detail=str(exc))
+
+
 def safe_next_path(value: str | None) -> str:
     if value and value.startswith("/") and not value.startswith("//"):
         return value
@@ -320,9 +324,15 @@ def renew_license_route(
             parsed = datetime.fromisoformat(raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="自定义到期时间格式错误") from exc
-        set_custom_expire_at(db, license, parsed, ip=get_client_ip(request))
+        try:
+            set_custom_expire_at(db, license, parsed, ip=get_client_ip(request))
+        except ValueError as exc:
+            raise bad_request_from_value_error(exc) from exc
     elif days:
-        renew_license(db, license, days, ip=get_client_ip(request))
+        try:
+            renew_license(db, license, days, ip=get_client_ip(request))
+        except ValueError as exc:
+            raise bad_request_from_value_error(exc) from exc
     else:
         raise HTTPException(status_code=400, detail="请选择续期天数或填写自定义到期时间")
     return redirect(f"/admin/licenses/{license_id}")
@@ -340,7 +350,10 @@ def permanent_license_route(
     license = db.get(License, license_id)
     if not license:
         raise HTTPException(status_code=404, detail="授权不存在")
-    set_permanent(db, license, value, ip=get_client_ip(request))
+    try:
+        set_permanent(db, license, value, ip=get_client_ip(request))
+    except ValueError as exc:
+        raise bad_request_from_value_error(exc) from exc
     return redirect(f"/admin/licenses/{license_id}")
 
 
@@ -355,7 +368,10 @@ def disable_license_route(
     license = db.get(License, license_id)
     if not license:
         raise HTTPException(status_code=404, detail="授权不存在")
-    disable_license(db, license, ip=get_client_ip(request))
+    try:
+        disable_license(db, license, ip=get_client_ip(request))
+    except ValueError as exc:
+        raise bad_request_from_value_error(exc) from exc
     return redirect(f"/admin/licenses/{license_id}")
 
 
@@ -370,7 +386,10 @@ def restore_license_route(
     license = db.get(License, license_id)
     if not license:
         raise HTTPException(status_code=404, detail="授权不存在")
-    restore_license(db, license, ip=get_client_ip(request))
+    try:
+        restore_license(db, license, ip=get_client_ip(request))
+    except ValueError as exc:
+        raise bad_request_from_value_error(exc) from exc
     return redirect(f"/admin/licenses/{license_id}")
 
 
@@ -385,7 +404,10 @@ def unbind_license_route(
     license = db.get(License, license_id)
     if not license:
         raise HTTPException(status_code=404, detail="授权不存在")
-    unbind_license(db, license, ip=get_client_ip(request))
+    try:
+        unbind_license(db, license, ip=get_client_ip(request))
+    except ValueError as exc:
+        raise bad_request_from_value_error(exc) from exc
     return redirect(f"/admin/licenses/{license_id}")
 
 
@@ -400,9 +422,10 @@ def delete_license_route(
     license = db.get(License, license_id)
     if not license:
         raise HTTPException(status_code=404, detail="授权不存在")
-    if license.status != LicenseStatus.UNUSED.value or license.activated_at:
-        raise HTTPException(status_code=400, detail="只能删除未激活卡密")
-    delete_license(db, license, ip=get_client_ip(request))
+    try:
+        delete_license(db, license, ip=get_client_ip(request))
+    except ValueError as exc:
+        raise bad_request_from_value_error(exc) from exc
     return redirect("/admin/licenses")
 
 

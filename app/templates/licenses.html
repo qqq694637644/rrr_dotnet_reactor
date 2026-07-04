@@ -50,6 +50,7 @@
           <td>
             <div class="actions compact-actions">
               <a class="small-button" href="/admin/licenses/{{ license.id }}">详情</a>
+              {% if license.status != 'deleted' %}
               <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="days" value="30"><button class="small-button" type="submit">续期30天</button></form>
               {% if license.status == 'disabled' %}
               <form method="post" action="/admin/licenses/{{ license.id }}/restore"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small-button" type="submit">恢复</button></form>
@@ -61,6 +62,7 @@
               {% endif %}
               {% if license.status == 'unused' and not license.activated_at %}
               <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定删除这条未激活卡密？')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small-button danger" type="submit">删除</button></form>
+              {% endif %}
               {% endif %}
             </div>
           </td>
