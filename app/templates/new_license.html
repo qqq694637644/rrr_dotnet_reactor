@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}新增卡密 - 授权服务器{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>新增卡密</h1>
+    <p>卡密只会完整显示一次，请生成后立即复制并发送给客户。</p>
+  </div>
+</div>
+
+{% if generated_key %}
+<section class="card success-card">
+  <h2>卡密已生成</h2>
+  <p>客户：{{ license.customer_name or '-' }}</p>
+  <div class="license-key">{{ generated_key }}</div>
+  <p class="muted">后台之后只显示后四位：{{ license.license_key_display }}</p>
+  <a class="button" href="/admin/licenses/{{ license.id }}">查看详情</a>
+</section>
+{% endif %}
+
+<section class="card narrow">
+  <h2>创建授权</h2>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/admin/licenses/new" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>客户名称
+      <input name="customer_name" required>
+    </label>
+    <label>授权天数
+      <input name="duration_days" type="number" min="1" value="365">
+    </label>
+    <label class="check">
+      <input name="is_permanent" type="checkbox" value="true"> 永久授权
+    </label>
+    <label>备注
+      <textarea name="note" rows="4" placeholder="可填写客户联系方式、订单来源等"></textarea>
+    </label>
+    <button type="submit">生成卡密</button>
+  </form>
+</section>
+{% endblock %}

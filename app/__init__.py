@@ -1,0 +1,1 @@
+"""Small online authorization server."""
