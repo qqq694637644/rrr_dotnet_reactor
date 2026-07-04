@@ -50,17 +50,17 @@
           <td>
             <div class="actions compact-actions">
               <a class="small-button" href="/admin/licenses/{{ license.id }}">详情</a>
-              <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="days" value="30"><button class="small-button" type="submit">续期30天</button></form>
+              <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="days" value="30"><button class="small-button" type="submit">续期30天</button></form>
               {% if license.status == 'disabled' %}
-              <form method="post" action="/admin/licenses/{{ license.id }}/restore"><button class="small-button" type="submit">恢复</button></form>
+              <form method="post" action="/admin/licenses/{{ license.id }}/restore"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small-button" type="submit">恢复</button></form>
               {% else %}
-              <form method="post" action="/admin/licenses/{{ license.id }}/disable"><button class="small-button danger" type="submit">禁用</button></form>
+              <form method="post" action="/admin/licenses/{{ license.id }}/disable"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small-button danger" type="submit">禁用</button></form>
               {% endif %}
               {% if license.hardware_id_display %}
-              <form method="post" action="/admin/licenses/{{ license.id }}/unbind"><button class="small-button" type="submit">解绑</button></form>
+              <form method="post" action="/admin/licenses/{{ license.id }}/unbind"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small-button" type="submit">解绑</button></form>
               {% endif %}
               {% if license.status == 'unused' and not license.activated_at %}
-              <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定删除这条未激活卡密？')"><button class="small-button danger" type="submit">删除</button></form>
+              <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定删除这条未激活卡密？')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small-button danger" type="submit">删除</button></form>
               {% endif %}
             </div>
           </td>

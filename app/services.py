@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .models import AdminUser, License, LicenseLog, LicenseStatus
@@ -193,17 +193,31 @@ def activate_license(db: Session, *, license_key: str, hardware_id: str, client_
     if license.status not in {LicenseStatus.UNUSED.value, LicenseStatus.ACTIVE.value}:
         return _fail_result(db, license, "activate", hardware_id, ip, client_version, "卡密已被使用")
 
-    license.hardware_id_hash = hash_hardware_id(normalized_hardware)
-    license.hardware_id_display = display_hardware_id(normalized_hardware)
-    if not license.activated_at:
-        license.activated_at = now
-    if license.is_permanent:
-        license.expire_at = None
-    elif not license.expire_at:
-        license.expire_at = now + timedelta(days=license.duration_days)
-    license.status = LicenseStatus.ACTIVE.value
-    license.last_check_at = now
-    license.last_ip = ip
+    expire_at = None if license.is_permanent else license.expire_at or now + timedelta(days=license.duration_days)
+    stmt = (
+        update(License)
+        .where(
+            License.id == license.id,
+            License.hardware_id_hash.is_(None),
+            License.status.in_([LicenseStatus.UNUSED.value, LicenseStatus.ACTIVE.value]),
+        )
+        .values(
+            hardware_id_hash=hash_hardware_id(normalized_hardware),
+            hardware_id_display=display_hardware_id(normalized_hardware),
+            activated_at=license.activated_at or now,
+            expire_at=expire_at,
+            status=LicenseStatus.ACTIVE.value,
+            last_check_at=now,
+            last_ip=ip,
+        )
+    )
+    result = db.execute(stmt)
+    if result.rowcount != 1:
+        db.rollback()
+        db.refresh(license)
+        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "卡密已被使用")
+
+    db.refresh(license)
     add_log(
         db,
         license=license,
@@ -327,6 +341,10 @@ def set_permanent(db: Session, license: License, value: bool, *, ip: str | None 
     if value:
         license.expire_at = None
         if license.activated_at and license.status == LicenseStatus.EXPIRED.value:
+            license.status = LicenseStatus.ACTIVE.value
+    elif license.activated_at and license.expire_at is None:
+        license.expire_at = utcnow() + timedelta(days=license.duration_days)
+        if license.status == LicenseStatus.EXPIRED.value:
             license.status = LicenseStatus.ACTIVE.value
     add_log(
         db,

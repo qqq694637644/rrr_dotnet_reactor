@@ -22,6 +22,7 @@
   <h2>创建授权</h2>
   {% if error %}<div class="alert">{{ error }}</div>{% endif %}
   <form method="post" action="/admin/licenses/new" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>客户名称
       <input name="customer_name" required>
     </label>

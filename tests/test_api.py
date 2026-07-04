@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import re
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -25,6 +26,24 @@ def _fresh_app(tmp_path, monkeypatch):
             del sys.modules[name]
     module = importlib.import_module("app.main")
     return module.app
+
+
+def _csrf_token(html: str) -> str:
+    match = re.search(r'name="csrf_token" value="([^"]+)"', html)
+    assert match, "csrf token not found"
+    return match.group(1)
+
+
+def _login_admin(client) -> str:
+    login = client.post(
+        "/admin/login",
+        data={"username": "admin", "password": "admin123", "next": "/admin/licenses"},
+        follow_redirects=False,
+    )
+    assert login.status_code == 303
+    page = client.get("/admin/licenses/new")
+    assert page.status_code == 200
+    return _csrf_token(page.text)
 
 
 @pytest.fixture()
@@ -71,6 +90,11 @@ def test_activate_verify_and_heartbeat(client):
     )
     assert heartbeat.status_code == 200
     assert heartbeat.json()["success"] is True
+
+    second_activation = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-002"})
+    assert second_activation.status_code == 200
+    assert second_activation.json()["success"] is False
+    assert second_activation.json()["message"] == "卡密已被使用"
 
 
 def test_hardware_mismatch_is_rejected(client):
@@ -125,17 +149,40 @@ def test_unbind_allows_reactivation_on_new_hardware(client):
     assert response.json()["success"] is True
 
 
+def test_cancel_permanent_sets_explicit_expire_at(client):
+    from app.database import SessionLocal
+    from app.models import License
+    from app.services import create_license, set_permanent
+
+    with SessionLocal() as db:
+        license, key = create_license(db, customer_name="永久客户", duration_days=15, is_permanent=True, note="pytest")
+        license_id = license.id
+
+    activation = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-PERM"})
+    assert activation.status_code == 200
+    assert activation.json()["success"] is True
+    assert activation.json()["is_permanent"] is True
+    assert activation.json()["expire_at"] is None
+
+    with SessionLocal() as db:
+        license = db.get(License, license_id)
+        set_permanent(db, license, False)
+
+    verify = client.post("/api/v1/verify", json={"license_key": key, "hardware_id": "HW-PERM"})
+    assert verify.status_code == 200
+    body = verify.json()
+    assert body["success"] is True
+    assert body["is_permanent"] is False
+    assert body["expire_at"] is not None
+    assert body["remaining_days"] >= 1
+
+
 def test_admin_login_and_create_license_page(client):
-    login = client.post(
-        "/admin/login",
-        data={"username": "admin", "password": "admin123", "next": "/admin/licenses"},
-        follow_redirects=False,
-    )
-    assert login.status_code == 303
+    csrf_token = _login_admin(client)
 
     response = client.post(
         "/admin/licenses/new",
-        data={"customer_name": "后台客户", "duration_days": "30", "note": "后台创建"},
+        data={"csrf_token": csrf_token, "customer_name": "后台客户", "duration_days": "30", "note": "后台创建"},
     )
 
     assert response.status_code == 200
@@ -155,3 +202,29 @@ def test_admin_login_and_create_license_page(client):
     filtered_logs_page = client.get("/admin/logs?event_type=create&result=success")
     assert filtered_logs_page.status_code == 200
     assert "后台客户" in filtered_logs_page.text
+
+
+def test_admin_post_requires_csrf(client):
+    _login_admin(client)
+
+    response = client.post(
+        "/admin/licenses/new",
+        data={"customer_name": "缺少 CSRF", "duration_days": "30", "note": "should fail"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_production_rejects_default_secret_and_password(monkeypatch):
+    monkeypatch.setenv("AUTH_ENV", "production")
+    monkeypatch.delenv("AUTH_SECRET_KEY", raising=False)
+    monkeypatch.delenv("AUTH_HASH_PEPPER", raising=False)
+    monkeypatch.delenv("AUTH_ADMIN_PASSWORD", raising=False)
+    for name in list(sys.modules):
+        if name == "app" or name.startswith("app."):
+            del sys.modules[name]
+
+    from app.config import get_settings
+
+    with pytest.raises(RuntimeError):
+        get_settings().validate_for_startup()

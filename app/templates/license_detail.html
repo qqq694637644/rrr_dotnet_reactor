@@ -30,24 +30,25 @@
   <div class="card">
     <h2>操作</h2>
     <div class="actions">
-      <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="days" value="30"><button type="submit">增加 30 天</button></form>
-      <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="days" value="90"><button type="submit">增加 90 天</button></form>
-      <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="days" value="365"><button type="submit">增加 365 天</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="days" value="30"><button type="submit">增加 30 天</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="days" value="90"><button type="submit">增加 90 天</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/renew"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="days" value="365"><button type="submit">增加 365 天</button></form>
     </div>
     <form method="post" action="/admin/licenses/{{ license.id }}/renew" class="stack compact">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label>自定义到期时间
         <input name="custom_expire_at" type="datetime-local" required>
       </label>
       <button type="submit">设置到期时间</button>
     </form>
     <div class="actions">
-      <form method="post" action="/admin/licenses/{{ license.id }}/permanent"><input type="hidden" name="value" value="true"><button type="submit">设置永久</button></form>
-      <form method="post" action="/admin/licenses/{{ license.id }}/permanent"><input type="hidden" name="value" value="false"><button type="submit">取消永久</button></form>
-      <form method="post" action="/admin/licenses/{{ license.id }}/disable"><button class="danger" type="submit">禁用授权</button></form>
-      <form method="post" action="/admin/licenses/{{ license.id }}/restore"><button type="submit">恢复授权</button></form>
-      <form method="post" action="/admin/licenses/{{ license.id }}/unbind"><button type="submit">解绑机器</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/permanent"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="value" value="true"><button type="submit">设置永久</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/permanent"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="value" value="false"><button type="submit">取消永久</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/disable"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">禁用授权</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/restore"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">恢复授权</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/unbind"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">解绑机器</button></form>
       {% if license.status == 'unused' and not license.activated_at %}
-      <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定删除这条未激活卡密？')"><button class="danger" type="submit">删除未激活卡密</button></form>
+      <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定删除这条未激活卡密？')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">删除未激活卡密</button></form>
       {% endif %}
     </div>
   </div>

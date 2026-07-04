@@ -131,6 +131,7 @@ def set_session_cookie(response: Response, admin_id: int) -> None:
         max_age=settings.session_max_age_seconds,
         httponly=True,
         samesite="lax",
+        secure=settings.cookie_secure,
     )
 
 
@@ -138,8 +139,21 @@ def clear_session_cookie(response: Response) -> None:
     response.delete_cookie(get_settings().session_cookie_name)
 
 
+def create_csrf_token(session_token: str | None) -> str:
+    if not session_token:
+        return ""
+    key = get_settings().secret_key.encode("utf-8")
+    return hmac.new(key, f"csrf:{session_token}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def verify_csrf_token(session_token: str | None, csrf_token: str | None) -> bool:
+    if not session_token or not csrf_token:
+        return False
+    return hmac.compare_digest(create_csrf_token(session_token), csrf_token)
+
+
 def get_client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
+    forwarded_for = request.headers.get("x-forwarded-for") if get_settings().trust_proxy_headers else None
     if forwarded_for:
         return forwarded_for.split(",", 1)[0].strip()
     return request.client.host if request.client else ""

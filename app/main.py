@@ -16,7 +16,16 @@ from .config import get_settings
 from .database import SessionLocal, get_db, init_db
 from .models import AdminUser, License, LicenseLog, LicenseStatus
 from .schemas import ActivateRequest, CheckRequest, LicenseCheckResponse
-from .security import clear_session_cookie, get_client_ip, read_session_token, set_session_cookie, utcnow, verify_password
+from .security import (
+    clear_session_cookie,
+    create_csrf_token,
+    get_client_ip,
+    read_session_token,
+    set_session_cookie,
+    utcnow,
+    verify_csrf_token,
+    verify_password,
+)
 from .services import (
     activate_license,
     check_license,
@@ -38,6 +47,7 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    settings.validate_for_startup()
     init_db()
     with SessionLocal() as db:
         seed_admin_user(db, settings.admin_username, settings.admin_password)
@@ -53,6 +63,7 @@ def render_template(request: Request, name: str, context: dict[str, object] | No
     template_context: dict[str, object] = {"request": request}
     if context:
         template_context.update(context)
+    template_context.setdefault("csrf_token", create_csrf_token(request.cookies.get(settings.session_cookie_name)))
     return templates.TemplateResponse(request=request, name=name, context=template_context, status_code=status_code)
 
 
@@ -133,6 +144,12 @@ def require_admin(request: Request, db: Annotated[Session, Depends(get_db)]) -> 
     return admin
 
 
+def require_csrf(request: Request, csrf_token: Annotated[str | None, Form()] = None) -> None:
+    session_token = request.cookies.get(settings.session_cookie_name)
+    if not verify_csrf_token(session_token, csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF token 无效")
+
+
 @app.exception_handler(LoginRequired)
 def login_required_handler(request: Request, exc: LoginRequired) -> RedirectResponse:
     return redirect(f"/admin/login?next={request.url.path}")
@@ -193,7 +210,7 @@ def login(
 
 
 @app.post("/admin/logout", include_in_schema=False)
-def logout() -> Response:
+def logout(csrf: Annotated[None, Depends(require_csrf)]) -> Response:
     response = redirect("/admin/login")
     clear_session_cookie(response)
     return response
@@ -260,6 +277,7 @@ def new_license_page(request: Request, admin: Annotated[AdminUser, Depends(requi
 def new_license(
     request: Request,
     admin: Annotated[AdminUser, Depends(require_admin)],
+    csrf: Annotated[None, Depends(require_csrf)],
     customer_name: Annotated[str, Form()],
     duration_days: Annotated[int, Form()] = 365,
     is_permanent: Annotated[bool, Form()] = False,
@@ -301,6 +319,7 @@ def renew_license_route(
     request: Request,
     license_id: int,
     admin: Annotated[AdminUser, Depends(require_admin)],
+    csrf: Annotated[None, Depends(require_csrf)],
     days: Annotated[int | None, Form()] = None,
     custom_expire_at: Annotated[str, Form()] = "",
     db: Session = Depends(get_db),
@@ -327,6 +346,7 @@ def permanent_license_route(
     request: Request,
     license_id: int,
     admin: Annotated[AdminUser, Depends(require_admin)],
+    csrf: Annotated[None, Depends(require_csrf)],
     value: Annotated[bool, Form()],
     db: Session = Depends(get_db),
 ) -> Response:
@@ -342,6 +362,7 @@ def disable_license_route(
     request: Request,
     license_id: int,
     admin: Annotated[AdminUser, Depends(require_admin)],
+    csrf: Annotated[None, Depends(require_csrf)],
     db: Session = Depends(get_db),
 ) -> Response:
     license = db.get(License, license_id)
@@ -356,6 +377,7 @@ def restore_license_route(
     request: Request,
     license_id: int,
     admin: Annotated[AdminUser, Depends(require_admin)],
+    csrf: Annotated[None, Depends(require_csrf)],
     db: Session = Depends(get_db),
 ) -> Response:
     license = db.get(License, license_id)
@@ -370,6 +392,7 @@ def unbind_license_route(
     request: Request,
     license_id: int,
     admin: Annotated[AdminUser, Depends(require_admin)],
+    csrf: Annotated[None, Depends(require_csrf)],
     db: Session = Depends(get_db),
 ) -> Response:
     license = db.get(License, license_id)
@@ -383,6 +406,7 @@ def unbind_license_route(
 def delete_license_route(
     license_id: int,
     admin: Annotated[AdminUser, Depends(require_admin)],
+    csrf: Annotated[None, Depends(require_csrf)],
     db: Session = Depends(get_db),
 ) -> Response:
     license = db.get(License, license_id)

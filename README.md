@@ -10,13 +10,14 @@
 - 全局日志页，可按事件类型和结果筛选最近授权日志。
 - 卡密只完整显示一次，数据库仅保存卡密哈希和后四位展示值。
 - 授权状态：`unused`、`active`、`expired`、`disabled`。
-- 首次激活绑定 Hardware ID。
+- 首次激活绑定 Hardware ID，并使用数据库条件更新避免并发请求覆盖机器绑定。
 - 启动验证和运行中心跳验证。
 - 到期、禁用、硬件不匹配时返回失败原因。
 - 续期 30/90/365 天、自定义到期时间、设置/取消永久。
 - 禁用、恢复、解绑机器、删除未激活卡密。
 - 授权列表页可直接执行详情、续期、禁用/恢复、解绑、删除未激活卡密。
 - 授权日志记录：创建、激活、验证、心跳、续期、禁用、解绑。
+- 后台状态变更表单带 CSRF token。
 
 ## 客户端接口
 
@@ -120,6 +121,11 @@ uvicorn app.main:app --reload
 | `AUTH_ADMIN_PASSWORD` | `admin123` | 首个管理员密码 |
 | `AUTH_SESSION_COOKIE` | `auth_admin_session` | 后台 Cookie 名称 |
 | `AUTH_SESSION_MAX_AGE_SECONDS` | `604800` | 登录有效期 |
+| `AUTH_ENV` | `development` | 设置为 `production` 时会拒绝默认 secret、hash pepper 和管理员密码 |
+| `AUTH_COOKIE_SECURE` | `false` | 设置为 `true` 后后台登录 Cookie 添加 Secure 标记，HTTPS 部署建议开启 |
+| `AUTH_TRUST_PROXY_HEADERS` | `false` | 设置为 `true` 后才信任 `X-Forwarded-For`，仅在可信反向代理后开启 |
+
+后台所有状态变更 POST 表单都带 CSRF token；缺少或错误 token 会返回 403。
 
 ## 数据库表
 
