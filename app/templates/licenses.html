@@ -60,9 +60,7 @@
               {% if license.hardware_id_display %}
               <form method="post" action="/admin/licenses/{{ license.id }}/unbind"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small-button" type="submit">解绑</button></form>
               {% endif %}
-              {% if license.status == 'unused' and not license.activated_at %}
-              <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定删除这条未激活卡密？')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small-button danger" type="submit">删除</button></form>
-              {% endif %}
+              <form method="post" action="/admin/licenses/{{ license.id }}/delete" onsubmit="return confirm('确定逻辑删除这条授权？删除后客户端将无法通过验证。')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="small-button danger" type="submit">删除</button></form>
               {% endif %}
             </div>
           </td>

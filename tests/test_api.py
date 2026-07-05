@@ -315,6 +315,40 @@ def test_delete_unused_license_is_logical_and_keeps_logs(client):
     assert activation.json()["message"] == "授权已删除"
 
 
+def test_delete_active_license_from_list_blocks_verify(client):
+    from app.database import SessionLocal
+    from app.models import License, LicenseLog
+
+    license_id, key = _create_admin_license(client, "已激活待删除客户")
+    activation = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-ACTIVE-DELETE"})
+    assert activation.status_code == 200
+    assert activation.json()["success"] is True
+
+    list_page = client.get("/admin/licenses")
+    assert list_page.status_code == 200
+    assert f"/admin/licenses/{license_id}/delete" in list_page.text
+    csrf_token = _csrf_token(list_page.text)
+
+    delete_response = client.post(f"/admin/licenses/{license_id}/delete", data={"csrf_token": csrf_token}, follow_redirects=False)
+    assert delete_response.status_code == 303
+
+    with SessionLocal() as db:
+        license = db.get(License, license_id)
+        assert license is not None
+        assert license.status == "deleted"
+        assert license.activated_at is not None
+        assert db.query(LicenseLog).filter(LicenseLog.license_id == license_id, LicenseLog.event_type == "delete").count() == 1
+
+    verify = client.post("/api/v1/verify", json={"license_key": key, "hardware_id": "HW-ACTIVE-DELETE"})
+    assert verify.status_code == 200
+    body = verify.json()
+    assert body["success"] is False
+    assert body["valid"] is False
+    assert body["code"] == "deleted"
+    assert body["message"] == "授权已删除"
+    _assert_iso_utc_z(body["server_time"])
+
+
 def test_deleted_license_cannot_be_restored_or_modified(client):
     from app.database import SessionLocal
     from app.models import License
