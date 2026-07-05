@@ -78,6 +78,11 @@ def _create_admin_license(client, customer_name: str = "后台客户") -> tuple[
     return int(detail_match.group(1)), key_match.group(1)
 
 
+def _assert_iso_utc_z(value: str | None) -> None:
+    assert isinstance(value, str)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", value), value
+
+
 def test_activate_verify_and_heartbeat(client):
     license_id, key = _create_license(days=30)
 
@@ -89,9 +94,12 @@ def test_activate_verify_and_heartbeat(client):
     body = activation.json()
     assert body["success"] is True
     assert body["valid"] is True
+    assert body["code"] == "ok"
     assert body["license_id"] == license_id
     assert body["status"] == "active"
     assert body["remaining_days"] >= 1
+    _assert_iso_utc_z(body["server_time"])
+    _assert_iso_utc_z(body["expire_at"])
 
     from app.database import SessionLocal
     from app.models import License
@@ -106,18 +114,25 @@ def test_activate_verify_and_heartbeat(client):
         json={"license_id": license_id, "hardware_id": "HW-001", "client_version": "1.0.0"},
     )
     assert verify.status_code == 200
-    assert verify.json()["success"] is True
+    verify_body = verify.json()
+    assert verify_body["success"] is True
+    assert verify_body["code"] == "ok"
+    _assert_iso_utc_z(verify_body["server_time"])
 
     heartbeat = client.post(
         "/api/v1/heartbeat",
         json={"license_key": key, "hardware_id": "HW-001", "client_version": "1.0.0"},
     )
     assert heartbeat.status_code == 200
-    assert heartbeat.json()["success"] is True
+    heartbeat_body = heartbeat.json()
+    assert heartbeat_body["success"] is True
+    assert heartbeat_body["code"] == "ok"
+    _assert_iso_utc_z(heartbeat_body["server_time"])
 
     second_activation = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-002"})
     assert second_activation.status_code == 200
     assert second_activation.json()["success"] is False
+    assert second_activation.json()["code"] == "already_used"
     assert second_activation.json()["message"] == "卡密已被使用"
 
 
@@ -156,7 +171,9 @@ def test_hardware_mismatch_is_rejected(client):
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is False
+    assert body["code"] == "hardware_mismatch"
     assert body["message"] == "硬件不匹配"
+    _assert_iso_utc_z(body["server_time"])
 
 
 def test_expired_license_is_rejected(client):
@@ -177,6 +194,7 @@ def test_expired_license_is_rejected(client):
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is False
+    assert body["code"] == "expired"
     assert body["status"] == "expired"
     assert body["message"] == "授权已过期"
 
@@ -197,6 +215,7 @@ def test_unbind_allows_reactivation_on_new_hardware(client):
 
     assert response.status_code == 200
     assert response.json()["success"] is True
+    assert response.json()["code"] == "ok"
 
 
 def test_cancel_permanent_sets_explicit_expire_at(client):
@@ -211,8 +230,10 @@ def test_cancel_permanent_sets_explicit_expire_at(client):
     activation = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-PERM"})
     assert activation.status_code == 200
     assert activation.json()["success"] is True
+    assert activation.json()["code"] == "ok"
     assert activation.json()["is_permanent"] is True
     assert activation.json()["expire_at"] is None
+    _assert_iso_utc_z(activation.json()["server_time"])
 
     with SessionLocal() as db:
         license = db.get(License, license_id)
@@ -222,8 +243,11 @@ def test_cancel_permanent_sets_explicit_expire_at(client):
     assert verify.status_code == 200
     body = verify.json()
     assert body["success"] is True
+    assert body["code"] == "ok"
     assert body["is_permanent"] is False
     assert body["expire_at"] is not None
+    _assert_iso_utc_z(body["expire_at"])
+    _assert_iso_utc_z(body["server_time"])
     assert body["remaining_days"] >= 1
 
 
@@ -269,6 +293,7 @@ def test_delete_unused_license_is_logical_and_keeps_logs(client):
     activation = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-DELETED"})
     assert activation.status_code == 200
     assert activation.json()["success"] is False
+    assert activation.json()["code"] == "deleted"
     assert activation.json()["message"] == "授权已删除"
 
 
@@ -300,7 +325,20 @@ def test_deleted_license_cannot_be_restored_or_modified(client):
     activation = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-DELETED-TERM"})
     assert activation.status_code == 200
     assert activation.json()["success"] is False
+    assert activation.json()["code"] == "deleted"
     assert activation.json()["message"] == "授权已删除"
+
+
+def test_missing_license_identifier_returns_protocol_error(client):
+    response = client.post("/api/v1/verify", json={"hardware_id": "HW-NO-LICENSE"})
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["success"] is False
+    assert body["valid"] is False
+    assert body["code"] == "missing_license_identifier"
+    assert body["message"] == "license_key 或 license_id 必须提供一个"
+    _assert_iso_utc_z(body["server_time"])
 
 
 def test_admin_post_requires_csrf(client):

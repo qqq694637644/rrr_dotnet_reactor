@@ -24,6 +24,7 @@ from .security import (
 @dataclass(frozen=True)
 class LicenseResult:
     success: bool
+    code: str
     message: str
     license: License | None = None
 
@@ -154,10 +155,10 @@ def ensure_not_deleted(license: License) -> None:
 
 
 def _success_result(license: License, message: str) -> LicenseResult:
-    return LicenseResult(success=True, message=message, license=license)
+    return LicenseResult(success=True, code="ok", message=message, license=license)
 
 
-def _fail_result(db: Session, license: License | None, event_type: str, hardware_id: str, ip: str, client_version: str | None, message: str) -> LicenseResult:
+def _fail_result(db: Session, license: License | None, event_type: str, hardware_id: str, ip: str, client_version: str | None, code: str, message: str) -> LicenseResult:
     add_log(
         db,
         license=license,
@@ -172,14 +173,14 @@ def _fail_result(db: Session, license: License | None, event_type: str, hardware
         license.last_check_at = utcnow()
         license.last_ip = ip
     db.commit()
-    return LicenseResult(success=False, message=message, license=license)
+    return LicenseResult(success=False, code=code, message=message, license=license)
 
 
 def activate_license(db: Session, *, license_key: str, hardware_id: str, client_version: str | None, ip: str) -> LicenseResult:
     now = utcnow()
     normalized_hardware = normalize_hardware_id(hardware_id)
     if not normalized_hardware:
-        return LicenseResult(success=False, message="Hardware ID 不能为空")
+        return LicenseResult(success=False, code="invalid_hardware_id", message="Hardware ID 不能为空")
 
     license = find_license(db, license_key=license_key)
     if not license:
@@ -194,19 +195,19 @@ def activate_license(db: Session, *, license_key: str, hardware_id: str, client_
             message="卡密不存在",
         )
         db.commit()
-        return LicenseResult(success=False, message="卡密不存在")
+        return LicenseResult(success=False, code="license_not_found", message="卡密不存在")
 
     update_expired_status(license, now)
     if license.status == LicenseStatus.DELETED.value:
-        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "授权已删除")
+        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "deleted", "授权已删除")
     if license.status == LicenseStatus.DISABLED.value:
-        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "卡密已禁用")
+        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "disabled", "卡密已禁用")
     if license.status == LicenseStatus.EXPIRED.value:
-        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "授权已过期")
+        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "expired", "授权已过期")
     if license.hardware_id_hash:
-        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "卡密已被使用")
+        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "already_used", "卡密已被使用")
     if license.status not in {LicenseStatus.UNUSED.value, LicenseStatus.ACTIVE.value}:
-        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "卡密已被使用")
+        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "invalid_status", "卡密已被使用")
 
     expire_at = None if license.is_permanent else license.expire_at or now + timedelta(days=license.duration_days)
     stmt = (
@@ -230,7 +231,7 @@ def activate_license(db: Session, *, license_key: str, hardware_id: str, client_
     if result.rowcount != 1:
         db.rollback()
         db.refresh(license)
-        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "卡密已被使用")
+        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "already_used", "卡密已被使用")
 
     db.refresh(license)
     add_log(
@@ -261,7 +262,7 @@ def check_license(
     now = utcnow()
     normalized_hardware = normalize_hardware_id(hardware_id)
     if not normalized_hardware:
-        return LicenseResult(success=False, message="Hardware ID 不能为空")
+        return LicenseResult(success=False, code="invalid_hardware_id", message="Hardware ID 不能为空")
 
     license = find_license(db, license_key=license_key, license_id=license_id)
     if not license:
@@ -276,19 +277,19 @@ def check_license(
             message="授权不存在",
         )
         db.commit()
-        return LicenseResult(success=False, message="授权不存在")
+        return LicenseResult(success=False, code="license_not_found", message="授权不存在")
 
     update_expired_status(license, now)
     if license.status == LicenseStatus.DELETED.value:
-        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "授权已删除")
+        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "deleted", "授权已删除")
     if license.status == LicenseStatus.UNUSED.value or not license.activated_at:
-        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "授权未激活")
+        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "not_activated", "授权未激活")
     if license.status == LicenseStatus.DISABLED.value:
-        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "授权已禁用")
+        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "disabled", "授权已禁用")
     if license.hardware_id_hash != hash_hardware_id(normalized_hardware):
-        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "硬件不匹配")
+        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "hardware_mismatch", "硬件不匹配")
     if license.status == LicenseStatus.EXPIRED.value:
-        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "授权已过期")
+        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "expired", "授权已过期")
 
     license.status = LicenseStatus.ACTIVE.value
     license.last_check_at = now

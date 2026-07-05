@@ -20,6 +20,7 @@ from .security import (
     clear_session_cookie,
     create_csrf_token,
     get_client_ip,
+    iso_utc_z,
     read_session_token,
     set_session_cookie,
     utcnow,
@@ -113,13 +114,32 @@ def api_response(result) -> LicenseCheckResponse:
     return LicenseCheckResponse(
         success=result.success,
         valid=result.success,
+        code=result.code,
         message=result.message,
         license_id=license.id if license else None,
         status=license.status if license else None,
-        expire_at=license.expire_at if license else None,
+        expire_at=iso_utc_z(license.expire_at) if license else None,
         is_permanent=bool(license.is_permanent) if license else False,
         remaining_days=remaining_days(license) if license else None,
-        server_time=utcnow(),
+        server_time=iso_utc_z(utcnow()),
+    )
+
+
+def protocol_error(code: str, message: str, status_code: int = 400) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": False,
+            "valid": False,
+            "code": code,
+            "message": message,
+            "license_id": None,
+            "status": None,
+            "expire_at": None,
+            "is_permanent": False,
+            "remaining_days": None,
+            "server_time": iso_utc_z(utcnow()),
+        },
     )
 
 
@@ -168,7 +188,7 @@ def login_required_handler(request: Request, exc: LoginRequired) -> RedirectResp
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "server_time": utcnow().isoformat()}
+    return {"status": "ok", "server_time": iso_utc_z(utcnow())}
 
 
 @app.get("/", include_in_schema=False)
@@ -444,7 +464,7 @@ def api_activate(payload: ActivateRequest, request: Request, db: Session = Depen
 @app.post("/api/v1/verify", response_model=LicenseCheckResponse)
 def api_verify(payload: CheckRequest, request: Request, db: Session = Depends(get_db)) -> Response:
     if not payload.license_key and payload.license_id is None:
-        return JSONResponse(status_code=400, content={"detail": "license_key 或 license_id 必须提供一个"})
+        return protocol_error("missing_license_identifier", "license_key 或 license_id 必须提供一个")
     result = check_license(
         db,
         event_type="verify",
@@ -460,7 +480,7 @@ def api_verify(payload: CheckRequest, request: Request, db: Session = Depends(ge
 @app.post("/api/v1/heartbeat", response_model=LicenseCheckResponse)
 def api_heartbeat(payload: CheckRequest, request: Request, db: Session = Depends(get_db)) -> Response:
     if not payload.license_key and payload.license_id is None:
-        return JSONResponse(status_code=400, content={"detail": "license_key 或 license_id 必须提供一个"})
+        return protocol_error("missing_license_identifier", "license_key 或 license_id 必须提供一个")
     result = check_license(
         db,
         event_type="heartbeat",

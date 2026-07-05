@@ -68,26 +68,46 @@
 {
   "success": true,
   "valid": true,
+  "code": "ok",
   "message": "授权有效",
   "license_id": 1,
   "status": "active",
-  "expire_at": "2026-08-03T12:00:00",
+  "expire_at": "2026-08-03T12:00:00Z",
   "is_permanent": false,
   "remaining_days": 30,
-  "server_time": "2026-07-04T12:00:00"
+  "server_time": "2026-07-04T12:00:00Z"
 }
 ```
 
-失败时 HTTP 仍返回 200，`success` / `valid` 为 `false`，`message` 会返回原因，例如：
+业务失败时 HTTP 仍返回 200，`success` / `valid` 为 `false`，`code` 返回稳定英文错误码，`message` 返回中文原因。`server_time` 和 `expire_at` 统一为 UTC ISO-8601 `Z` 格式，例如 `2026-07-04T12:00:00Z`。
 
-- `卡密不存在`
-- `卡密已被使用`
-- `卡密已禁用`
-- `授权不存在`
-- `授权未激活`
-- `硬件不匹配`
-- `授权已过期`
-- `授权已禁用`
+常见错误码：
+
+- `license_not_found`：卡密或授权不存在
+- `already_used`：卡密已被使用
+- `disabled`：授权已禁用
+- `not_activated`：授权未激活，可由客户端清缓存后重新激活
+- `hardware_mismatch`：硬件不匹配
+- `expired`：授权已过期
+- `deleted`：授权已删除
+- `invalid_hardware_id`：Hardware ID 为空或非法
+
+协议错误，例如 `/verify` 缺少 `license_key` 和 `license_id`，返回 HTTP 400，但仍使用同一 JSON 结构：
+
+```json
+{
+  "success": false,
+  "valid": false,
+  "code": "missing_license_identifier",
+  "message": "license_key 或 license_id 必须提供一个",
+  "license_id": null,
+  "status": null,
+  "expire_at": null,
+  "is_permanent": false,
+  "remaining_days": null,
+  "server_time": "2026-07-04T12:00:00Z"
+}
+```
 
 ## 本地运行
 
