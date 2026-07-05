@@ -21,6 +21,18 @@ def utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+def iso_utc_z(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    else:
+        value = value.astimezone(UTC)
+
+    return value.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def normalize_license_key(value: str) -> str:
     return "".join(ch for ch in value.upper() if ch.isalnum())
 

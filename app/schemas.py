@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from pydantic import BaseModel, Field
 
 
@@ -21,10 +19,11 @@ class CheckRequest(BaseModel):
 class LicenseCheckResponse(BaseModel):
     success: bool
     valid: bool
+    code: str
     message: str
     license_id: int | None
     status: str | None
-    expire_at: datetime | None
+    expire_at: str | None
     is_permanent: bool
     remaining_days: int | None
-    server_time: datetime
+    server_time: str
