@@ -348,6 +348,16 @@ def test_delete_active_license_from_list_blocks_verify(client):
     assert body["message"] == "授权已删除"
     _assert_iso_utc_z(body["server_time"])
 
+    default_list = client.get("/admin/licenses")
+    assert default_list.status_code == 200
+    assert "已激活待删除客户" not in default_list.text
+    assert f"/admin/licenses/{license_id}" not in default_list.text
+
+    deleted_list = client.get("/admin/licenses?status=deleted")
+    assert deleted_list.status_code == 200
+    assert "已激活待删除客户" in deleted_list.text
+    assert f"/admin/licenses/{license_id}" in deleted_list.text
+
 
 def test_deleted_license_cannot_be_restored_or_modified(client):
     from app.database import SessionLocal
