@@ -258,6 +258,8 @@ def license_list(
     query = select(License).order_by(desc(License.created_at), desc(License.id))
     if status:
         query = query.where(License.status == status)
+    else:
+        query = query.where(License.status != LicenseStatus.DELETED.value)
     licenses = list(db.scalars(query))
     changed = False
     for license in licenses:
