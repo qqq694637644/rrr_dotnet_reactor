@@ -207,7 +207,7 @@ def activate_license(db: Session, *, license_key: str, hardware_id: str, client_
     if license.hardware_id_hash:
         return _fail_result(db, license, "activate", hardware_id, ip, client_version, "already_used", "卡密已被使用")
     if license.status not in {LicenseStatus.UNUSED.value, LicenseStatus.ACTIVE.value}:
-        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "invalid_status", "卡密已被使用")
+        return _fail_result(db, license, "activate", hardware_id, ip, client_version, "already_used", "卡密已被使用")
 
     expire_at = None if license.is_permanent else license.expire_at or now + timedelta(days=license.duration_days)
     stmt = (
@@ -286,6 +286,8 @@ def check_license(
         return _fail_result(db, license, event_type, hardware_id, ip, client_version, "not_activated", "授权未激活")
     if license.status == LicenseStatus.DISABLED.value:
         return _fail_result(db, license, event_type, hardware_id, ip, client_version, "disabled", "授权已禁用")
+    if not license.hardware_id_hash:
+        return _fail_result(db, license, event_type, hardware_id, ip, client_version, "not_activated", "授权未激活")
     if license.hardware_id_hash != hash_hardware_id(normalized_hardware):
         return _fail_result(db, license, event_type, hardware_id, ip, client_version, "hardware_mismatch", "硬件不匹配")
     if license.status == LicenseStatus.EXPIRED.value:

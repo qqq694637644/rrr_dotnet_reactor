@@ -86,11 +86,13 @@
 - `license_not_found`：卡密或授权不存在
 - `already_used`：卡密已被使用
 - `disabled`：授权已禁用
-- `not_activated`：授权未激活，可由客户端清缓存后重新激活
+- `not_activated`：授权未激活或已解绑，可由客户端清缓存后重新激活
 - `hardware_mismatch`：硬件不匹配
 - `expired`：授权已过期
 - `deleted`：授权已删除
 - `invalid_hardware_id`：Hardware ID 为空或非法
+- `missing_license_identifier`：请求缺少 `license_key` 和 `license_id`
+- `invalid_request`：请求参数格式错误或缺少必填字段
 
 协议错误，例如 `/verify` 缺少 `license_key` 和 `license_id`，返回 HTTP 400，但仍使用同一 JSON 结构：
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -184,6 +185,26 @@ def require_csrf(request: Request, csrf_token: Annotated[str | None, Form()] = N
 @app.exception_handler(LoginRequired)
 def login_required_handler(request: Request, exc: LoginRequired) -> RedirectResponse:
     return redirect(f"/admin/login?next={request.url.path}")
+
+
+@app.exception_handler(RequestValidationError)
+def request_validation_error_handler(request: Request, exc: RequestValidationError) -> Response:
+    if request.url.path.startswith("/api/v1/"):
+        return protocol_error("invalid_request", "请求参数错误", status_code=422)
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {
+                    "loc": list(error.get("loc", ())),
+                    "msg": error.get("msg", "请求参数错误"),
+                    "type": error.get("type", "value_error"),
+                }
+                for error in exc.errors()
+            ]
+        },
+    )
 
 
 @app.get("/health")

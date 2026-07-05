@@ -211,6 +211,24 @@ def test_unbind_allows_reactivation_on_new_hardware(client):
         license = db.get(License, license_id)
         unbind_license(db, license)
 
+    old_verify = client.post("/api/v1/verify", json={"license_key": key, "hardware_id": "HW-OLD"})
+    assert old_verify.status_code == 200
+    old_verify_body = old_verify.json()
+    assert old_verify_body["success"] is False
+    assert old_verify_body["valid"] is False
+    assert old_verify_body["code"] == "not_activated"
+    assert old_verify_body["message"] == "授权未激活"
+    _assert_iso_utc_z(old_verify_body["server_time"])
+
+    new_verify = client.post("/api/v1/verify", json={"license_key": key, "hardware_id": "HW-NEW"})
+    assert new_verify.status_code == 200
+    new_verify_body = new_verify.json()
+    assert new_verify_body["success"] is False
+    assert new_verify_body["valid"] is False
+    assert new_verify_body["code"] == "not_activated"
+    assert new_verify_body["message"] == "授权未激活"
+    _assert_iso_utc_z(new_verify_body["server_time"])
+
     response = client.post("/api/v1/activate", json={"license_key": key, "hardware_id": "HW-NEW"})
 
     assert response.status_code == 200
@@ -338,6 +356,23 @@ def test_missing_license_identifier_returns_protocol_error(client):
     assert body["valid"] is False
     assert body["code"] == "missing_license_identifier"
     assert body["message"] == "license_key 或 license_id 必须提供一个"
+    _assert_iso_utc_z(body["server_time"])
+
+
+def test_api_validation_error_uses_protocol_shape(client):
+    response = client.post("/api/v1/activate", json={"hardware_id": "HW-MISSING-KEY"})
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["success"] is False
+    assert body["valid"] is False
+    assert body["code"] == "invalid_request"
+    assert body["message"] == "请求参数错误"
+    assert body["license_id"] is None
+    assert body["status"] is None
+    assert body["expire_at"] is None
+    assert body["is_permanent"] is False
+    assert body["remaining_days"] is None
     _assert_iso_utc_z(body["server_time"])
 
 
