@@ -394,10 +394,9 @@ def disable_license(db: Session, license: License, *, ip: str | None = None) -> 
 
 
 def delete_license(db: Session, license: License, *, ip: str | None = None) -> License:
-    if license.status != LicenseStatus.UNUSED.value or license.activated_at:
-        raise ValueError("只能删除未激活卡密")
+    ensure_not_deleted(license)
     license.status = LicenseStatus.DELETED.value
-    add_log(db, license=license, event_type="delete", hardware_id=None, ip=ip, client_version=None, result="success", message="删除未激活卡密")
+    add_log(db, license=license, event_type="delete", hardware_id=None, ip=ip, client_version=None, result="success", message="删除授权")
     db.commit()
     db.refresh(license)
     return license
