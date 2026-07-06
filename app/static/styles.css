@@ -34,7 +34,7 @@ a:hover { text-decoration: underline; }
 }
 .brand { font-weight: 700; color: var(--text); font-size: 18px; }
 nav { display: flex; gap: 12px; align-items: center; }
-.container { max-width: 1180px; margin: 28px auto; padding: 0 20px; }
+.container { width: 100%; max-width: none; margin: 28px 0; padding: 0 20px; box-sizing: border-box; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
 .page-head h1 { margin: 0; }
 .page-head p { margin: 4px 0 0; color: var(--muted); }
